@@ -4,8 +4,10 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
 
-  base: '/dda-metalurgica/',
+  // Repositório metalhouse.github.io publica na raiz
+  base: '/',
 
+  // Proxy utilizado somente no desenvolvimento local
   server: {
     proxy: {
       '/api': {
