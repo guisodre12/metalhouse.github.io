@@ -1,4 +1,115 @@
-import type {DashboardData,Fornecedor,Material,Movimentacao} from './types';
-async function req<T>(path:string,init:RequestInit={}):Promise<T>{const r=await fetch('/api'+path,{...init,headers:{'Content-Type':'application/json',...(init.headers||{})}});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.detail||'Falha na requisição');return d as T}
-export const api={dashboard:()=>req<DashboardData>('/dashboard'),fornecedores:()=>req<Fornecedor[]>('/fornecedores'),criarFornecedor:(b:unknown)=>req<{message:string}>('/fornecedores',{method:'POST',body:JSON.stringify(b)}),materiais:(s='')=>req<Material[]>('/materiais?search='+encodeURIComponent(s)),criarMaterial:(b:unknown)=>req<{message:string}>('/materiais',{method:'POST',body:JSON.stringify(b)}),movimentacoes:(a='',b='')=>req<Movimentacao[]>(`/movimentacoes?inicio=${a}&fim=${b}`),criarMovimentacao:(b:unknown)=>req<{message:string;novo_saldo:number}>('/movimentacoes',{method:'POST',body:JSON.stringify(b)}),relatorios:()=>req<{materiais:Material[];resumo_movimentacoes:{tipo:string;quantidade:number}[];total_estoque:number;materiais_criticos:number}>('/relatorios')};
-export function csv(name:string,rows:Record<string,unknown>[]){if(!rows.length)return;const keys=Object.keys(rows[0]);const q=(v:unknown)=>`"${String(v??'').replace(/"/g,'""')}"`;const content='\ufeff'+[keys.map(q).join(';'),...rows.map(r=>keys.map(k=>q(r[k])).join(';'))].join('\n');const url=URL.createObjectURL(new Blob([content],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();URL.revokeObjectURL(url)}
+import type {
+  DashboardData,
+  Fornecedor,
+  Material,
+  Movimentacao
+} from './types';
+
+// Local: utiliza o proxy do Vite.
+// Produção: utiliza a API hospedada no Render.
+const API_URL = import.meta.env.DEV
+  ? '/api'
+  : 'https://metalhouse-api.onrender.com/api';
+
+async function req<T>(
+  path: string,
+  init: RequestInit = {}
+): Promise<T> {
+  const r = await fetch(`${API_URL}${path}`, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(init.headers || {})
+    }
+  });
+
+  const d = await r.json().catch(() => ({}));
+
+  if (!r.ok) {
+    throw new Error(d.detail || 'Falha na requisição');
+  }
+
+  return d as T;
+}
+
+export const api = {
+  dashboard: () =>
+    req<DashboardData>('/dashboard'),
+
+  fornecedores: () =>
+    req<Fornecedor[]>('/fornecedores'),
+
+  criarFornecedor: (b: unknown) =>
+    req<{ message: string }>('/fornecedores', {
+      method: 'POST',
+      body: JSON.stringify(b)
+    }),
+
+  materiais: (s = '') =>
+    req<Material[]>(
+      '/materiais?search=' + encodeURIComponent(s)
+    ),
+
+  criarMaterial: (b: unknown) =>
+    req<{ message: string }>('/materiais', {
+      method: 'POST',
+      body: JSON.stringify(b)
+    }),
+
+  movimentacoes: (a = '', b = '') =>
+    req<Movimentacao[]>(
+      `/movimentacoes?inicio=${a}&fim=${b}`
+    ),
+
+  criarMovimentacao: (b: unknown) =>
+    req<{
+      message: string;
+      novo_saldo: number
+    }>('/movimentacoes', {
+      method: 'POST',
+      body: JSON.stringify(b)
+    }),
+
+  relatorios: () =>
+    req<{
+      materiais: Material[];
+      resumo_movimentacoes: {
+        tipo: string;
+        quantidade: number
+      }[];
+      total_estoque: number;
+      materiais_criticos: number
+    }>('/relatorios')
+};
+
+export function csv(
+  name: string,
+  rows: Record<string, unknown>[]
+) {
+  if (!rows.length) return;
+
+  const keys = Object.keys(rows[0]);
+
+  const q = (v: unknown) =>
+    `"${String(v ?? '').replace(/"/g, '""')}"`;
+
+  const content = '\ufeff' + [
+    keys.map(q).join(';'),
+    ...rows.map(r =>
+      keys.map(k => q(r[k])).join(';')
+    )
+  ].join('\n');
+
+  const url = URL.createObjectURL(
+    new Blob([content], {
+      type: 'text/csv;charset=utf-8'
+    })
+  );
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+
+  URL.revokeObjectURL(url);
+}
