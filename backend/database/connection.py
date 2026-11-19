@@ -76,6 +76,11 @@ def init_db():
     with connect() as db:
         db.executescript(f'''
         CREATE TABLE IF NOT EXISTS fornecedor(id {pk},nome TEXT NOT NULL,contato TEXT,observacoes TEXT);
-        CREATE TABLE IF NOT EXISTS material(id {pk},codigo TEXT NOT NULL UNIQUE,descricao TEXT NOT NULL,fabricante TEXT NOT NULL,fornecedor_id INTEGER,unidade TEXT NOT NULL,saldo_atual INTEGER NOT NULL DEFAULT 0,estoque_minimo INTEGER NOT NULL,FOREIGN KEY(fornecedor_id) REFERENCES fornecedor(id));
+        CREATE TABLE IF NOT EXISTS material(id {pk},codigo TEXT NOT NULL UNIQUE,descricao TEXT NOT NULL,fabricante TEXT NOT NULL,fornecedor_id INTEGER,unidade TEXT NOT NULL,saldo_atual INTEGER NOT NULL DEFAULT 0,estoque_minimo INTEGER NOT NULL,estoque_maximo INTEGER NOT NULL DEFAULT 0,FOREIGN KEY(fornecedor_id) REFERENCES fornecedor(id));
         CREATE TABLE IF NOT EXISTS movimentacao(id {pk},material_id INTEGER NOT NULL,tipo TEXT NOT NULL CHECK(tipo IN ('Entrada','Saída')),quantidade INTEGER NOT NULL CHECK(quantidade>0),data_hora TEXT NOT NULL,observacao TEXT,FOREIGN KEY(material_id) REFERENCES material(id));
         ''')
+        # Bancos criados antes do estoque máximo ganham a coluna automaticamente.
+        if USE_PG:
+            db.execute('ALTER TABLE material ADD COLUMN IF NOT EXISTS estoque_maximo INTEGER NOT NULL DEFAULT 0')
+        elif 'estoque_maximo' not in [r['name'] for r in db.execute('PRAGMA table_info(material)')]:
+            db.execute('ALTER TABLE material ADD COLUMN estoque_maximo INTEGER NOT NULL DEFAULT 0')

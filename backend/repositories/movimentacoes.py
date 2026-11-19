@@ -8,11 +8,11 @@ def listar(inicio=None,fim=None):
     with connect() as db: return [dict(r) for r in db.execute(sql,args)]
 def criar(d):
     with connect() as db:
-        row=db.execute('SELECT saldo_atual FROM material WHERE id=?',(d.material_id,)).fetchone()
+        row=db.execute('SELECT saldo_atual,estoque_maximo FROM material WHERE id=?',(d.material_id,)).fetchone()
         if not row: raise ValueError('Material não encontrado.')
         saldo=row['saldo_atual']
         if d.tipo=='Saída' and d.quantidade>saldo: raise ValueError('Estoque insuficiente para realizar a saída.')
         novo=saldo+d.quantidade if d.tipo=='Entrada' else saldo-d.quantidade
         db.execute('INSERT INTO movimentacao(material_id,tipo,quantidade,data_hora,observacao) VALUES(?,?,?,?,?)',(d.material_id,d.tipo,d.quantidade,datetime.now().strftime('%Y-%m-%d %H:%M:%S'),d.observacao.strip()))
         db.execute('UPDATE material SET saldo_atual=? WHERE id=?',(novo,d.material_id))
-        return novo
+        return novo,row['estoque_maximo']

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from backend.models.schemas import FornecedorCreate,MaterialCreate,MovimentacaoCreate
+from backend.models.schemas import FornecedorCreate,MaterialCreate,MovimentacaoCreate,LimitesUpdate
 from backend.repositories import fornecedores,materiais,movimentacoes
 from backend.services.dashboard import dados
 from backend.database.connection import IntegrityError
@@ -21,13 +21,20 @@ def post_material(d:MaterialCreate):
         materiais.criar(d); return {'message':'Material cadastrado com sucesso!'}
     except ValueError as e: raise HTTPException(400,str(e))
     except IntegrityError: raise HTTPException(409,'Já existe um material com esse código.')
+@router.put('/materiais/{material_id}/limites')
+def put_limites(material_id:int,d:LimitesUpdate):
+    if not materiais.atualizar_limites(material_id,d.estoque_minimo,d.estoque_maximo): raise HTTPException(404,'Material não encontrado.')
+    return {'message':'Limites de estoque atualizados com sucesso!'}
 @router.get('/movimentacoes')
 def get_mov(inicio:str|None=None,fim:str|None=None): return movimentacoes.listar(inicio,fim)
 @router.post('/movimentacoes',status_code=201)
 def post_mov(d:MovimentacaoCreate):
-    try: return {'message':'Movimentação registrada com sucesso!','novo_saldo':movimentacoes.criar(d)}
+    try:
+        novo,maximo=movimentacoes.criar(d)
+        aviso='O saldo ultrapassou o estoque máximo definido para este material.' if maximo and novo>maximo else ''
+        return {'message':'Movimentação registrada com sucesso!','novo_saldo':novo,'aviso':aviso}
     except ValueError as e: raise HTTPException(400,str(e))
 @router.get('/relatorios')
 def relatorios():
     ms=materiais.listar(); d=dados()
-    return {'materiais':ms,'resumo_movimentacoes':d['resumo_movimentacoes'],'total_estoque':sum(x['saldo_atual'] for x in ms),'materiais_criticos':sum(x['saldo_atual']<=x['estoque_minimo'] for x in ms)}
+    return {'materiais':ms,'resumo_movimentacoes':d['resumo_movimentacoes'],'total_estoque':sum(x['saldo_atual'] for x in ms),'materiais_criticos':sum(x['saldo_atual']<=x['estoque_minimo'] or (x['estoque_maximo']>0 and x['saldo_atual']>x['estoque_maximo']) for x in ms)}

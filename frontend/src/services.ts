@@ -26,7 +26,10 @@ async function req<T>(
   const d = await r.json().catch(() => ({}));
 
   if (!r.ok) {
-    throw new Error(d.detail || 'Falha na requisição');
+    const det = Array.isArray(d.detail)
+      ? String(d.detail[0]?.msg || '').replace(/^Value error, /, '')
+      : d.detail;
+    throw new Error(det || 'Falha na requisição');
   }
 
   return d as T;
@@ -56,6 +59,12 @@ export const api = {
       body: JSON.stringify(b)
     }),
 
+  atualizarLimites: (id: number, b: unknown) =>
+    req<{ message: string }>(`/materiais/${id}/limites`, {
+      method: 'PUT',
+      body: JSON.stringify(b)
+    }),
+
   movimentacoes: (a = '', b = '') =>
     req<Movimentacao[]>(
       `/movimentacoes?inicio=${a}&fim=${b}`
@@ -64,7 +73,8 @@ export const api = {
   criarMovimentacao: (b: unknown) =>
     req<{
       message: string;
-      novo_saldo: number
+      novo_saldo: number;
+      aviso?: string
     }>('/movimentacoes', {
       method: 'POST',
       body: JSON.stringify(b)
