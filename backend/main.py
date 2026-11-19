@@ -14,6 +14,13 @@ from backend.routes.api import router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    # SEED_DEMO=true: carrega dados de exemplo quando o banco está vazio (útil na Render gratuita).
+    if os.getenv('SEED_DEMO', '').strip().lower() in ('1', 'true', 'sim', 'yes'):
+        try:
+            from backend.seed import popular_se_vazio
+            popular_se_vazio()
+        except Exception as e:  # nunca impede a API de subir
+            print('Aviso: não foi possível carregar os dados de exemplo:', e)
     yield
 
 
