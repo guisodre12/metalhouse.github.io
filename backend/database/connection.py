@@ -1,17 +1,81 @@
 import os, sqlite3
 from pathlib import Path
+
 BASE_DIR = Path(__file__).resolve().parents[2]
 DB_PATH = Path(os.getenv('DB_PATH', BASE_DIR / 'data' / 'dda_metalurgica.db'))
+DATABASE_URL = os.getenv('DATABASE_URL', '').strip()
+USE_PG = bool(DATABASE_URL)
+
+if USE_PG:
+    import psycopg
+    from psycopg.rows import dict_row
+    IntegrityError = (sqlite3.IntegrityError, psycopg.errors.IntegrityError)
+else:
+    IntegrityError = (sqlite3.IntegrityError,)
+
+
+class _PgDB:
+    """Mesma interface usada com o sqlite3: db.execute(sql, params) com placeholders '?'."""
+    def __init__(self):
+        self.conn = psycopg.connect(DATABASE_URL, row_factory=dict_row, connect_timeout=15)
+
+    def execute(self, sql, params=()):
+        return self.conn.execute(sql.replace('?', '%s'), tuple(params))
+
+    def executescript(self, sql):
+        for stmt in [x.strip() for x in sql.split(';') if x.strip()]:
+            self.conn.execute(stmt)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        try:
+            if exc_type is None:
+                self.conn.commit()
+            else:
+                self.conn.rollback()
+        finally:
+            self.conn.close()
+        return False
+
+
+class _SqliteDB:
+    def __init__(self):
+        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        self.conn = sqlite3.connect(DB_PATH)
+        self.conn.row_factory = sqlite3.Row
+        self.conn.execute('PRAGMA foreign_keys = ON')
+
+    def execute(self, sql, params=()):
+        return self.conn.execute(sql, params)
+
+    def executescript(self, sql):
+        self.conn.executescript(sql)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        try:
+            if exc_type is None:
+                self.conn.commit()
+            else:
+                self.conn.rollback()
+        finally:
+            self.conn.close()
+        return False
+
+
 def connect():
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute('PRAGMA foreign_keys = ON')
-    return conn
+    return _PgDB() if USE_PG else _SqliteDB()
+
+
 def init_db():
+    pk = 'SERIAL PRIMARY KEY' if USE_PG else 'INTEGER PRIMARY KEY AUTOINCREMENT'
     with connect() as db:
-        db.executescript('''
-        CREATE TABLE IF NOT EXISTS fornecedor(id INTEGER PRIMARY KEY AUTOINCREMENT,nome TEXT NOT NULL,contato TEXT,observacoes TEXT);
-        CREATE TABLE IF NOT EXISTS material(id INTEGER PRIMARY KEY AUTOINCREMENT,codigo TEXT NOT NULL UNIQUE,descricao TEXT NOT NULL,fabricante TEXT NOT NULL,fornecedor_id INTEGER,unidade TEXT NOT NULL,saldo_atual INTEGER NOT NULL DEFAULT 0,estoque_minimo INTEGER NOT NULL,FOREIGN KEY(fornecedor_id) REFERENCES fornecedor(id));
-        CREATE TABLE IF NOT EXISTS movimentacao(id INTEGER PRIMARY KEY AUTOINCREMENT,material_id INTEGER NOT NULL,tipo TEXT NOT NULL CHECK(tipo IN ('Entrada','Saída')),quantidade INTEGER NOT NULL CHECK(quantidade>0),data_hora TEXT NOT NULL,observacao TEXT,FOREIGN KEY(material_id) REFERENCES material(id));
+        db.executescript(f'''
+        CREATE TABLE IF NOT EXISTS fornecedor(id {pk},nome TEXT NOT NULL,contato TEXT,observacoes TEXT);
+        CREATE TABLE IF NOT EXISTS material(id {pk},codigo TEXT NOT NULL UNIQUE,descricao TEXT NOT NULL,fabricante TEXT NOT NULL,fornecedor_id INTEGER,unidade TEXT NOT NULL,saldo_atual INTEGER NOT NULL DEFAULT 0,estoque_minimo INTEGER NOT NULL,FOREIGN KEY(fornecedor_id) REFERENCES fornecedor(id));
+        CREATE TABLE IF NOT EXISTS movimentacao(id {pk},material_id INTEGER NOT NULL,tipo TEXT NOT NULL CHECK(tipo IN ('Entrada','Saída')),quantidade INTEGER NOT NULL CHECK(quantidade>0),data_hora TEXT NOT NULL,observacao TEXT,FOREIGN KEY(material_id) REFERENCES material(id));
         ''')

@@ -1,8 +1,8 @@
-import sqlite3
 from fastapi import APIRouter, HTTPException
 from backend.models.schemas import FornecedorCreate,MaterialCreate,MovimentacaoCreate
 from backend.repositories import fornecedores,materiais,movimentacoes
 from backend.services.dashboard import dados
+from backend.database.connection import IntegrityError
 router=APIRouter(prefix='/api')
 @router.get('/dashboard')
 def dashboard(): return dados()
@@ -20,7 +20,7 @@ def post_material(d:MaterialCreate):
         if d.fornecedor_id not in [x['id'] for x in fornecedores.listar()]: raise ValueError('Selecione um fornecedor válido.')
         materiais.criar(d); return {'message':'Material cadastrado com sucesso!'}
     except ValueError as e: raise HTTPException(400,str(e))
-    except sqlite3.IntegrityError: raise HTTPException(409,'Já existe um material com esse código.')
+    except IntegrityError: raise HTTPException(409,'Já existe um material com esse código.')
 @router.get('/movimentacoes')
 def get_mov(inicio:str|None=None,fim:str|None=None): return movimentacoes.listar(inicio,fim)
 @router.post('/movimentacoes',status_code=201)
